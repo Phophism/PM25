@@ -1,0 +1,224 @@
+---
+title: "PM 2.5 in Germany"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+```
+```{r}
+#import data from url or file
+
+# Chiang Mai - http://berkeleyearth.lbl.gov/air-quality/maps/cities/Thailand/Chiang_Mai/Chiang_Mai.txt
+# Bangkok - http://berkeleyearth.lbl.gov/air-quality/maps/cities/Thailand/Bangkok/Bangkok.txt
+
+url <- 'http://berkeleyearth.lbl.gov/air-quality/maps/cities/Thailand/Chiang_Mai/Chiang_Mai.txt'
+df <- read_tsv(url,skip=10, col_names = FALSE)
+df
+```
+
+```{r}
+colnames(df) <- c('Year','Month','Day','Hour','PM2_5','X6','X7')
+df
+```
+
+```{r}
+df <- df %>%
+  select(Year:PM2_5)
+df
+```
+
+```{r}
+df <- df %>% 
+  mutate(date_time = ISOdate(Year,Month,Day,Hour),
+         local_dt = date_time+hours(7),
+         local_hr = hour(local_dt))
+df
+```
+ ------ Summarized Data (Reserved) ------
+
+```{r}
+df %>% 
+  mutate(year = year(local_dt),
+         month = month(local_dt),
+         date = date(local_dt)) %>%
+  group_by(date) %>%
+  summarize(avg_pm = mean(PM2_5))
+```
+ ------ Visualized Data ------
+ 
+ ## entire data
+```{r}
+df %>% 
+  mutate(year = year(local_dt),
+         month = month(local_dt),
+         date = date(local_dt)) %>%
+  group_by(date) %>%
+  summarize(avg_pm = mean(PM2_5)) %>%
+  ggplot(aes(date, y = avg_pm , color = as.factor(year(date))))+geom_line()+geom_smooth()
+```
+
+## by date for each month
+```{r}
+df %>% 
+  mutate(year = year(local_dt),
+         month = month(local_dt),
+         date = date(local_dt)) %>%
+  group_by(year,month,date) %>%
+  summarize(avg_pm = mean(PM2_5)) %>%
+  ggplot(aes(date, y = avg_pm , color = as.factor(month)))+geom_line()
+```
+
+## By month for each year
+```{r}
+df %>% 
+  mutate(year = year(local_dt),
+         month = month(local_dt),
+         date = date(local_dt)) %>%
+  group_by(year,month) %>%
+  summarize(avg_pm = mean(PM2_5)) %>%
+  ggplot(aes(month, y = avg_pm , color = as.factor(year)))+geom_line()
+```
+ 
+ ## create heat map
+```{r}
+df %>% 
+  mutate(date = date(local_dt)) %>%
+  group_by(date) %>%
+  summarize(avg_pm = mean(PM2_5)) %>%
+  mutate(day = day(date),
+         month = month(date),
+         year = year(date)) %>%
+  ggplot(aes(day, y=month, fill=avg_pm)) + geom_tile()
+```
+ 
+ ## add factor to map, make it display by day
+ 
+```{r}
+df %>% 
+  mutate(date = date(local_dt)) %>%
+  group_by(date) %>%
+  summarize(avg_pm = mean(PM2_5)) %>%
+  mutate(day = as.factor(day(date)),
+         month = as.factor(month(date)),
+         year = as.factor(year(date))) %>%
+  ggplot(aes(day, y=month, fill=avg_pm)) + geom_tile()
+```
+ 
+ ## add border and set a color
+```{r}
+df %>% 
+  mutate(date = date(local_dt)) %>%
+  group_by(date) %>%
+  summarize(avg_pm = mean(PM2_5)) %>%
+  mutate(day = as.factor(day(date)),
+         month = as.factor(month(date)),
+         year = as.factor(year(date))) %>%
+  ggplot(aes(day, y=month, fill=avg_pm)) +
+  geom_tile(color="white") +
+  scale_fill_gradient(low = "green" , high = 'red')
+```
+ 
+## adjust cell scale
+```{r, fig.hight=2, fig.width=8} 
+df %>% 
+  mutate(date = date(local_dt)) %>%
+  group_by(date) %>%
+  summarize(avg_pm = mean(PM2_5)) %>%
+  mutate(day = as.factor(day(date)),
+         month = as.factor(month(date)),
+         year = as.factor(year(date))) %>%
+  ggplot(aes(day, y=month, fill=avg_pm)) +
+  geom_tile(color="white") +
+  scale_fill_gradient(low = "green" , high = 'red') +
+  coord_equal()
+```
+## set interval factor for avg pm 2.5
+
+```{r}
+df %>% 
+  mutate(date = date(local_dt)) %>%
+  group_by(date) %>%
+  summarize(avg_pm = mean(PM2_5)) %>%
+  mutate(day = as.factor(day(date)),
+         month = as.factor(month(date)),
+         year = as.factor(year(date))) %>%
+  mutate(pm_lv = cut(avg_pm, ## create new column to classify level of smog
+         breaks = c(0,12,35.4,55.4,150.4,250.4,350.4),
+         labels = c('good','moderate','unheathy for sensitive groups'
+                    ,'unheathy','very unheathy','hazardous'))) %>%
+  ggplot(aes(day, y=month, fill=pm_lv)) + ## replace avg_pm with pm_level
+  geom_tile(color="white") +
+  scale_fill_manual(values = c('green','yellow','orange','red','magenta', 'violet'))+
+  coord_equal()
+```
+
+## separate by year
+```{r,fig.hight=12, fig.width=16}
+df %>% 
+  filter(year(local_dt) > 2015) %>%
+  mutate(date = date(local_dt)) %>%
+  group_by(date) %>%
+  summarize(avg_pm = mean(PM2_5)) %>%
+  mutate(day = as.factor(day(date)),
+         month = as.factor(month(date)),
+         year = as.factor(year(date))) %>%
+  mutate(pm_lv = cut(avg_pm, 
+         breaks = c(0,12,35.4,55.4,150.4,250.4,350.4),
+         labels = c('good','moderate','unheathy for sensitive groups'
+                    ,'unheathy','very unheathy','hazardous'))) %>%
+  ggplot(aes(day, y=month, fill=pm_lv)) + 
+  geom_tile(color="white") +
+  facet_grid(year~.) + ## separate by year
+  scale_fill_manual(values = c('green','yellow','orange','red','magenta', 'violet'))+
+  coord_equal()
+
+```
+## reverse month -> make less value on top
+```{r,fig.hight=12, fig.width=16}
+df %>% 
+  filter(year(local_dt) > 2015) %>%
+  mutate(date = date(local_dt)) %>%
+  group_by(date) %>%
+  summarize(avg_pm = mean(PM2_5)) %>%
+  mutate(day = as.factor(day(date)),
+         month = fct_rev(as_factor(month(date))),  ## remove as.factor and add fct_rev() to month and make it factor using as_factor
+         year = as.factor(year(date))) %>%
+  mutate(pm_lv = cut(avg_pm, 
+         breaks = c(0,12,35.4,55.4,150.4,250.4,350.4),
+         labels = c('good','moderate','unheathy for sensitive groups'
+                    ,'unheathy','very unheathy','hazardous'))) %>%
+  ggplot(aes(day, y=month, fill=pm_lv)) + 
+  xlab("Day") + ylab("Month") +
+  geom_tile(color="white") +
+  facet_grid(year~.) + 
+  scale_fill_manual(values = c('green','yellow','orange','red','magenta', 'violet'))+
+  coord_equal()
+```
+## add tooltip
+
+```{r}
+tt <- df %>%  ## put ggplot in to tt (tooltip)
+  filter(year(local_dt) > 2017) %>%
+  mutate(date = date(local_dt)) %>%
+  group_by(date) %>%
+  summarize(avg_pm = mean(PM2_5)) %>%
+  mutate(day = as.factor(day(date)),
+         month = fct_rev(as_factor(month(date))),  
+         year = as.factor(year(date))) %>%
+  mutate(pm_lv = cut(avg_pm, 
+         breaks = c(0,12,35.4,55.4,150.4,250.4,350.4),
+         labels = c('good','moderate','unheathy for sensitive groups'
+                    ,'unheathy','very unheathy','hazardous'))) %>%
+  ggplot(aes(day, y=month, fill=pm_lv)) + 
+  xlab("Day") + ylab("Month") +
+  geom_tile(color="white") +
+  facet_grid(year~.) + 
+  scale_fill_manual(values = c('green','yellow','orange','red','magenta', 'violet'))+
+  coord_equal()
+
+ggplotly(tt) # display ggplot with tooltip
+```
+
